@@ -178,6 +178,51 @@ contract TribunalTest is Fixture {
         assertEq(uint8(ruling(oid2)), uint8(Tribunal.Ruling.Void));
     }
 
+    function test_aStalePendingObjectionNeverHoldsPastTheWindow() public {
+        // Stale by completion: the Intake completed the request (here with our callback refusing a
+        // short panel) but no ruling landed. The hold ends with the window, and a late answer is
+        // impossible because the Intake completes a request once.
+        uint256 id = approvedBy(alice);
+        uint256 oid = objectTo(bob, id);
+        bytes32 rid = tribunal.objection(oid).intakeId;
+        OracleAttestation.Attestation memory a = attestation(10, keccak256("short panel"));
+        a.agreed = 16;
+        assertFalse(intake.complete(rid, 0, abi.encode(rid, a, signFor(address(tribunal), a))), "callback reverted");
+        (,,, bool completed) = intake.requests(rid);
+        assertTrue(completed);
+        assertEq(uint8(ruling(oid)), uint8(Tribunal.Ruling.Pending));
+        (bool held,,) = standing(id);
+        assertTrue(held, "the window is still open for another objector");
+        skip(WINDOW + 1);
+        (held,,) = standing(id);
+        assertFalse(held, "stale by completion: nothing holds the plea");
+        seasons.record(id);
+        assertEq(seasons.bestOf(0, alice)[0], 40, "the original score: no panel ruled");
+        tribunal.expire(oid);
+        tribunal.settle(oid);
+
+        // Stale by time: 20 minutes without an answer, the Intake still open.
+        uint256 id2 = approvedBy(carol);
+        skip(WINDOW - 1);
+        uint256 oid2 = objectTo(bob, id2);
+        skip(tribunal.PENDING_EXPIRY());
+        (held,,) = standing(id2);
+        assertTrue(held, "last second of the ruling");
+        vm.expectRevert(abi.encodeWithSelector(Seasons.Held.selector, id2));
+        seasons.record(id2);
+        skip(1);
+        (held,,) = standing(id2);
+        assertFalse(held, "stale by time");
+        seasons.record(id2);
+        // the late answer is refused and changes nothing
+        bytes32 rid2 = tribunal.objection(oid2).intakeId;
+        OracleAttestation.Attestation memory late = attestation(0, keccak256("late"));
+        assertFalse(intake.complete(rid2, 0, abi.encode(rid2, late, signFor(address(tribunal), late))));
+        (, bool sustained,) = standing(id2);
+        assertFalse(sustained);
+        assertTrue(seasons.recorded(id2));
+    }
+
     function test_aStalePendingObjectionIsVoidedByTheNextObjector() public {
         uint256 id = approvedBy(alice);
         uint256 oid = objectTo(bob, id);

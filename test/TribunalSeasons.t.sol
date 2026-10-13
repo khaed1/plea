@@ -114,6 +114,128 @@ contract TribunalSeasonsTest is Fixture {
         assertEq(seasons.bestOf(0, alice)[0], 38);
     }
 
+    function test_aVoidAtTheLastSecondLeavesNoRoomForASecondObjection() public {
+        // Approval in the season's last second, objection in the window's last second, no ruling:
+        // the slot frees at verdict + 40 min, but the window closed at + 20, so nobody can object
+        // again and the close at + 60 records the original score.
+        keepAlive(carol);
+        uint256 end = uint256(gate.startedAt()) + SEASON;
+        vm.warp(end - 1);
+        uint256 id = approvedPlea(alice, 40);
+        vm.warp(end - 1 + WINDOW);
+        uint256 oid = objectTo(bob, id);
+        vm.warp(end - 1 + WINDOW + tribunal.PENDING_EXPIRY());
+        (bool held,,) = tribunal.standing(id);
+        assertTrue(held, "the ruling's last second");
+        vm.expectRevert(abi.encodeWithSelector(Seasons.Held.selector, id));
+        seasons.record(id);
+        skip(1);
+        (held,,) = tribunal.standing(id);
+        assertFalse(held, "stale by time: free");
+        tribunal.expire(oid);
+        objectFails(carol, id, abi.encodeWithSelector(Tribunal.WindowClosed.selector, id));
+        objectFails(bob, id, abi.encodeWithSelector(Tribunal.WindowClosed.selector, id));
+        assertLt(vm.getBlockTimestamp(), end + seasons.CLOSE_GRACE());
+        uint256 stake = imd.balanceOf(bob);
+        tribunal.settle(oid);
+        assertEq(imd.balanceOf(bob) - stake, 0.35e18, "void: the stake comes back");
+        vm.warp(end + seasons.CLOSE_GRACE());
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        seasons.closeSeason(ids);
+        assertTrue(seasons.recorded(id));
+        assertEq(seasons.bestOf(0, alice)[0], 40);
+    }
+
+    function test_twoRulingsAtTheEdgeStayInsideTheGrace() public {
+        // An early overrule, then a second objection in the window's last second that never gets
+        // an answer: the plea is free by verdict + 40 min with the first panel's lower score.
+        keepAlive(carol);
+        uint256 end = uint256(gate.startedAt()) + SEASON;
+        vm.warp(end - 1);
+        uint256 id = approvedPlea(alice, 40);
+        uint8 n = gate.getPlea(id).need; // re-scored at the need: overruled, and never above 40
+        uint256 first = objectTo(bob, id);
+        assertTrue(rule(first, n));
+        vm.warp(end - 1 + WINDOW);
+        uint256 second = objectTo(carol, id);
+        objectFails(bob, id, abi.encodeWithSelector(Tribunal.ObjectionPending.selector, second));
+        vm.warp(end - 1 + WINDOW + tribunal.PENDING_EXPIRY() + 1);
+        (bool held, bool sustained, uint8 lowest) = tribunal.standing(id);
+        assertFalse(held);
+        assertFalse(sustained);
+        assertEq(lowest, n);
+        vm.warp(end + seasons.CLOSE_GRACE());
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        seasons.closeSeason(ids);
+        assertEq(seasons.bestOf(0, alice)[0], n);
+        assertEq(uint8(tribunal.objection(second).ruling), uint8(Tribunal.Ruling.Pending), "nobody expired it");
+        tribunal.expire(second);
+        assertEq(uint8(tribunal.objection(second).ruling), uint8(Tribunal.Ruling.Void));
+    }
+
+    function test_theLetterboxStatusShowsHeldPendingAndSustainedPoints() public {
+        uint256 amount = plea.balanceOf(alice) / 10;
+        vm.prank(alice);
+        uint256 id = letterbox.plead(amount, "Rent is due and I keep the rest.");
+        assertTrue(answer(id, 40));
+        vm.prank(keeper);
+        letterbox.deliver(id);
+        string memory until = _clock(uint256(gate.getPlea(id).verdictAt) + WINDOW);
+        assertTrue(
+            _has(letterbox.status(alice), string.concat("+40 points held until ", until, " (objections open)")),
+            letterbox.status(alice)
+        );
+        skip(10 minutes);
+        uint256 oid = objectTo(bob, id);
+        skip(WINDOW - 10 minutes + 1); // window closed, the objection still pending
+        assertTrue(_has(letterbox.status(alice), "+40 points held: an objection is pending"), letterbox.status(alice));
+        string memory n = vm.toString(gate.getPlea(id).need); // re-scored at the need: overruled
+        assertTrue(rule(oid, gate.getPlea(id).need));
+        assertTrue(_has(letterbox.status(alice), string.concat("+", n, " points once recorded")), letterbox.status(alice));
+        seasons.record(id);
+        assertTrue(
+            _has(letterbox.status(alice), string.concat("+", n, " points (season 1, rank 1)")), letterbox.status(alice)
+        );
+
+        // a sustained objection
+        uint256 amount2 = plea.balanceOf(carol) / 10;
+        vm.prank(carol);
+        uint256 id2 = letterbox.plead(amount2, "Taking a little profit, holding the rest for season two.");
+        assertTrue(answer(id2, 40));
+        vm.prank(keeper);
+        letterbox.deliver(id2);
+        uint256 oid2 = objectTo(bob, id2);
+        assertTrue(rule(oid2, 0));
+        assertTrue(_has(letterbox.status(carol), "no points: an objection was sustained"), letterbox.status(carol));
+    }
+
+    function _has(string memory hay, string memory needle) internal pure returns (bool) {
+        bytes memory h = bytes(hay);
+        bytes memory n = bytes(needle);
+        if (n.length > h.length) return false;
+        for (uint256 i; i + n.length <= h.length; ++i) {
+            bool ok = true;
+            for (uint256 j; j < n.length; ++j) {
+                if (h[i + j] != n[j]) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (ok) return true;
+        }
+        return false;
+    }
+
+    function _clock(uint256 t) internal pure returns (string memory) {
+        return string.concat(_two((t / 3600) % 24), ":", _two((t / 60) % 60), " UTC");
+    }
+
+    function _two(uint256 v) internal pure returns (string memory) {
+        return v < 10 ? string.concat("0", vm.toString(v)) : vm.toString(v);
+    }
+
     function test_aSustainedPleaIsNeverRecordedEvenByAClose() public {
         uint256 id = approvedPlea(alice, 40);
         uint256 oid = objectTo(bob, id);

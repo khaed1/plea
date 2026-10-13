@@ -708,6 +708,87 @@ contract ForkTestnetTest is Test {
         assertEq(IMD.balanceOf(address(letterbox)), 0);
     }
 
+    /// Objection! through the live Intake v2: the committed Tribunal is deployed after the launch,
+    /// a second wallet objects to an approved plea (the Tribunal mints the Sepolia oracle fee and
+    /// pulls the 0.35 IMD stake), the writer completes with a re-score signed under the Tribunal's
+    /// own domain, the stake goes to the season pot, and the points wait for the window. A second
+    /// objection the panel cannot answer is void and its stake comes back.
+    function test_objectionThroughTheLiveIntake() public {
+        Tribunal tribunal = Tribunal(launch.deployTribunal(type(Tribunal).creationCode));
+        assertEq(address(tribunal), launch.predictTribunal());
+        assertEq(address(tribunal.intake()), INTAKE);
+        address a = w[1];
+        address b = w[2];
+        address c = w[3];
+        buy(a, 50e18);
+        _warp(_now() + 1 days);
+        (uint256 id, bytes32 rid) = plead(a);
+        uint256 g = gasleft();
+        answer(rid, 40);
+        emit log_named_uint("gate verdict delivery gas (whole complete call)", g - gasleft());
+        assertEq(uint8(_status(id)), uint8(CabalGate.Status.Approved));
+        vm.expectRevert(abi.encodeWithSelector(Seasons.Held.selector, id));
+        seasons.record(id);
+
+        uint256 paidBefore = IERC20(ORACLE_IMD).balanceOf(INTAKE);
+        uint256 stakeBefore = IMD.balanceOf(b);
+        vm.startPrank(b);
+        IMD.approve(address(tribunal), type(uint256).max);
+        g = gasleft();
+        uint256 oid = tribunal.object(id, "Three lines of boilerplate: the same rent story every wallet tells this week.");
+        emit log_named_uint("object gas", g - gasleft());
+        vm.stopPrank();
+        assertEq(stakeBefore - IMD.balanceOf(b), 0.35e18, "stake in pool IMD");
+        assertGe(IERC20(ORACLE_IMD).balanceOf(INTAKE) + 1, paidBefore, "the Intake was paid the minted fee");
+        assertEq(IMD.balanceOf(address(tribunal)), 0.35e18);
+        bytes32 orid = tribunal.objection(oid).intakeId;
+        (address payer,,, bool done) = intake.requests(orid);
+        assertEq(payer, address(tribunal));
+        assertFalse(done);
+
+        // the writer completes with a signed re-score at the plea's need: overruled, and the
+        // recorded score falls to it (never above the original 40)
+        uint8 re = gate.getPlea(id).need;
+        OracleAttestation.Attestation memory at = _attest(re);
+        (uint8 v, bytes32 r, bytes32 s_) = vm.sign(SIGNER_KEY, tribunal.attestationDigest(at));
+        g = gasleft();
+        vm.prank(WRITER);
+        intake.complete(orid, 0, keccak256("attestation"), "uri", abi.encode(orid, at, abi.encodePacked(r, s_, v)));
+        emit log_named_uint("objection ruling delivery gas (whole complete call)", g - gasleft());
+        Tribunal.Objection memory o = tribunal.objection(oid);
+        assertEq(uint8(o.ruling), uint8(Tribunal.Ruling.Overruled));
+        assertEq(o.newScore, re);
+        (,,, done) = intake.requests(orid);
+        assertTrue(done, "the live Intake marks the request completed");
+        uint256 key = (_now() - gate.startedAt()) / SEASON; // five-hour seasons: a day in is season 4
+        uint256 potBefore = seasons.seasonFees(key);
+        tribunal.settle(oid);
+        assertEq(seasons.seasonFees(key) - potBefore, 0.35e18, "overruled: the stake feeds the season pot");
+        assertEq(IMD.balanceOf(address(tribunal)), 0);
+
+        // a second objector; the panel splits: void, stake back
+        vm.startPrank(c);
+        IMD.approve(address(tribunal), type(uint256).max);
+        uint256 oid2 = tribunal.object(id, "The first panel was generous; this is an ad for a bike shop.");
+        vm.stopPrank();
+        bytes32 orid2 = tribunal.objection(oid2).intakeId;
+        g = gasleft();
+        fail(orid2, 2, bytes32("disagreed"), 12, 28);
+        emit log_named_uint("objection failure delivery gas (whole complete call)", g - gasleft());
+        assertEq(uint8(tribunal.objection(oid2).ruling), uint8(Tribunal.Ruling.Void));
+        stakeBefore = IMD.balanceOf(c);
+        tribunal.settle(oid2);
+        assertEq(IMD.balanceOf(c) - stakeBefore, 0.35e18);
+
+        // the sale was never touched; the points come after the window, at the lowest score
+        vm.prank(a);
+        gate.executeSell(0);
+        assertEq(uint8(_status(id)), uint8(CabalGate.Status.Executed));
+        _warp(uint256(gate.getPlea(id).verdictAt) + 20 minutes + 1);
+        seasons.record(id);
+        assertEq(seasons.bestOf(key, a)[0], re);
+    }
+
     /// The same letter typed into `letter(text)` on a block explorer pleads through the live Intake
     /// v2; the writer's own `SELL`, typed the same way, sells it and returns the tip.
     function test_explorerLetterThroughTheLiveIntake() public {

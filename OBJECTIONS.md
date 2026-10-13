@@ -271,11 +271,12 @@ Following the repo's layout:
 
 - **`test/Tribunal.t.sol`:** sustained, overruled and void flows with exact payouts. Window edges (0 s, 20 min, 20 min + 1 s). Re-filing after Void inside and outside the window. `expire` by time and by a completed Intake request. Each eligibility error. Text rules, including `[OBJECTION` in any case. The question and body JSON, with quotes and backslashes in both texts. The definitions copy appears verbatim in `gate.body(id)`.
 - **`test/TribunalAdversarial.t.sol`:** callbacks from strangers. A replayed attestation. An attestation signed for the gate's domain. A wrong panel, a late callback, an unknown request. A failure for a non-pending objection. Objections on denied, pending and expired pleas. Seller, owner and launch-owner objectors. A plea recorded before the Tribunal was deployed. A second objection while one is pending or after a final ruling.
-- **`test/TribunalSeasons.t.sol`:** `record` reverts `Held` during the window and while pending, and `ObjectionSustained` after a sustain. `closeSeason` skips held pleas without reverting. A letter's `deliver` during a hold sells and leaves the points unrecorded; a later `record` works. An approval in a season's last second is ruled and recorded inside the close grace. With no Tribunal deployed, behaviour is byte-for-byte today's.
-- **`test/TribunalInvariant.t.sol`:** random objections, callbacks, failures, expiries, settles, records and time jumps. Invariants: the Tribunal's IMD balance equals its unsettled stakes; every stake is paid exactly once; a sustained plea is never recorded; `held` is false at `verdictAt + WINDOW + PENDING_EXPIRY`; `WINDOW + PENDING_EXPIRY < CLOSE_GRACE`.
-- **`test/LaunchManifest.t.sol`:** the new constructor argument, the Tribunal hash commitment (and the zero-hash "off" launch), gas under the cap.
-- **Gas pass:** the Tribunal callback at or below the gate's.
-- **`test/fork/ForkTestnet.t.sol`:** an objection end to end against the live Intake v2, sustained and overruled.
+- **`test/TribunalSeasons.t.sol`:** `record` reverts `Held` during the window and while pending, and `ObjectionSustained` after a sustain. `closeSeason` skips held pleas without reverting. A letter's `deliver` during a hold sells and leaves the points unrecorded; a later `record` works. An approval in a season's last second is ruled and recorded inside the close grace; a void in the window's last second leaves no room for a second objection; two rulings at the edge stay inside the grace. The Letterbox's status line shows held, pending, lowered and sustained points. With no Tribunal deployed, behaviour is byte-for-byte today's.
+- **`test/TribunalStanding.t.sol`:** `Seasons._standing` against mock launchers and Tribunals: no launcher, a launcher without `tribunal()`, a wrong-sized answer, a zero Tribunal, a reverting Tribunal and a wrong-sized `standing` all record as before (fail open); a held, sustained, lower or higher answer holds, refuses, lowers or keeps. The share table: strictly falling, within half a basis point of the straight line, 10,000 in all, 25 entries, 6 × 10,000,000 PLEA = 6% of the supply.
+- **`test/TribunalAdversarial.t.sol` (fuzz):** random objections, rulings, failures, expiries and settles keep the Tribunal's IMD balance equal to its unsettled stakes, and every stake is paid exactly once.
+- **`test/LaunchManifest.t.sol`:** the new constructor argument, the Tribunal hash commitment (and the zero-hash "off" launch), gas under the cap, `deployTribunal` gas.
+- **Gas pass:** `test_callbackFitsTheIntakesGasBudget` logs the ruling callback's gas against the Intake's 200,000.
+- **`test/fork/ForkTestnet.t.sol`:** an objection end to end against the live Intake v2 on a Sepolia fork: the committed Tribunal deployed after the launch, an overruled ruling signed under the Tribunal's domain, the stake into the season pot, a void second objection with its stake back, the sale untouched and the points recorded after the window at the lowest score.
 
 ---
 
@@ -286,6 +287,9 @@ Following the repo's layout:
 3. **Points arrive up to 40 minutes later.** The leaderboard lags by the hold.
 4. **Honest objectors lose the stake on a panel failure,** as pleaders lose the oracle fee today.
 5. **Objection text reaches the judges.** It has the same injection surface as a plea, with the same guards: text rules, markers, the untrusted-text instruction, and the `objection` definition.
+6. **A plea may contain `[OBJECTION]`.** The gate's text rules (deployed code, 200 bytes under the size limit) reject only `[PLEA` markers, so a seller can write a fake objection into the plea itself. It sits inside the `[PLEA]` markers the question points at, and text posing as a message from elsewhere is manipulation under the first panel's rules too, so it costs the seller points before it can confuse anyone. Not worth a gate change.
+7. **An overruled stake lands in the season running when `settle` is called,** through `Seasons.checkpoint`, not necessarily the plea's season (a settle after the season turned feeds the next pot; after a close, the rollover). The IMD stays in the prizes either way.
+8. **Every objection is a re-roll that can only lower the score.** With panels landing within about ±2 of each other, even a merit-free objection lowers the expected recorded score a little (the minimum of two or three draws). The two-ruling cap, the 0.85 IMD price and the stake lost on an overrule are the brakes; the rule was chosen so that no objection is ever pointless.
 
 ---
 
