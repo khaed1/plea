@@ -14,9 +14,10 @@ import {IPLEA, IPleaHook} from "./interfaces/IPleaParts.sol";
 interface ISeasonsForLetters {
     function record(uint256 pleaId) external;
     function recorded(uint256 pleaId) external view returns (bool);
+    function shareBps(uint256 rank) external pure returns (uint256);
     function currentSeason() external view returns (bool live, uint256 season, uint64 endsAt);
     function checkpoint() external;
-    function topOf(uint256 season) external view returns (Entry[10] memory);
+    function topOf(uint256 season) external view returns (Entry[25] memory);
     function seasonFees(uint256 season) external view returns (uint256);
     function rollover() external view returns (uint256);
     function BONUS_SEASONS() external view returns (uint256);
@@ -544,7 +545,7 @@ contract Letterbox is ReentrancyGuardTransient {
         return string.concat(head, "NO VERDICT", _escrowNote(id), unicode" · ", _next(w, id));
     }
 
-    /// @notice The running season's top 10 as text lines: rank, name, points, and the IMD prize and
+    /// @notice The running season's top 25 as text lines: rank, name, points, and the IMD prize and
     /// PLEA bonus each rank would get from the pot as it stands.
     function leaderboard() external view returns (string memory out) {
         (bool live, uint256 key, uint64 endsAt) = seasons.currentSeason();
@@ -560,10 +561,10 @@ contract Letterbox is ReentrancyGuardTransient {
             _imd(potNow),
             bonus != 0 ? string.concat(" + ", _thousands(bonus / 1e18), " PLEA") : ""
         );
-        ISeasonsForLetters.Entry[10] memory t = seasons.topOf(key);
-        for (uint256 i; i < 10; ++i) {
+        ISeasonsForLetters.Entry[25] memory t = seasons.topOf(key);
+        for (uint256 i; i < 25; ++i) {
             if (t[i].wallet == address(0)) break;
-            uint256 share = _shareBps(i);
+            uint256 share = seasons.shareBps(i);
             out = string.concat(
                 out,
                 "\n",
@@ -582,8 +583,9 @@ contract Letterbox is ReentrancyGuardTransient {
                     : " (needs 60)"
             );
         }
-        out =
-            string.concat(out, "\nBest 3 approved pleas count. Top 10 with 60+ points share 25/18/14/11/9/7/6/4/3/3%.");
+        out = string.concat(
+            out, "\nBest 3 approved pleas count. Top 25 with 60+ points share 4.50% (1st) down to 3.50% (25th)."
+        );
     }
 
     // ---------------------------------------------------------------- text helpers
@@ -611,9 +613,9 @@ contract Letterbox is ReentrancyGuardTransient {
     function _points(address w, uint256 id, CabalGate.Plea memory p) internal view returns (string memory) {
         if (!seasons.recorded(id)) return string.concat("+", Strings.toString(p.score), " points once recorded");
         uint256 key = (uint256(p.verdictAt) - gate.startedAt()) / gate.SEASON();
-        ISeasonsForLetters.Entry[10] memory t = seasons.topOf(key);
+        ISeasonsForLetters.Entry[25] memory t = seasons.topOf(key);
         string memory rank = "";
-        for (uint256 i; i < 10; ++i) {
+        for (uint256 i; i < 25; ++i) {
             if (t[i].wallet == w) {
                 rank = string.concat(", rank ", Strings.toString(i + 1));
                 break;
@@ -659,18 +661,6 @@ contract Letterbox is ReentrancyGuardTransient {
         if (v % 1000 < 10) s = string.concat("00", s);
         else if (v % 1000 < 100) s = string.concat("0", s);
         return string.concat(_thousands(v / 1000), ",", s);
-    }
-
-    function _shareBps(uint256 rank) internal pure returns (uint256) {
-        if (rank == 0) return 2_500;
-        if (rank == 1) return 1_800;
-        if (rank == 2) return 1_400;
-        if (rank == 3) return 1_100;
-        if (rank == 4) return 900;
-        if (rank == 5) return 700;
-        if (rank == 6) return 600;
-        if (rank == 7) return 400;
-        return 300;
     }
 
     function _max(uint256 a, uint256 b) internal pure returns (uint256) {

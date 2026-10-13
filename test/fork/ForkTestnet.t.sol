@@ -8,6 +8,7 @@ import {CabalGate} from "../../src/CabalGate.sol";
 import {Seasons} from "../../src/Seasons.sol";
 import {PleaDistributor} from "../../src/PleaDistributor.sol";
 import {Letterbox} from "../../src/Letterbox.sol";
+import {Tribunal} from "../../src/Tribunal.sol";
 import {PleaLaunch} from "../../src/PleaLaunch.sol";
 import {PleaHook} from "../../src/PleaHook.sol";
 import {OracleAttestation} from "../../src/OracleAttestation.sol";
@@ -121,7 +122,8 @@ contract ForkTestnetTest is Test {
             START,
             ORACLE_IMD,
             true,
-            keccak256(type(Letterbox).creationCode)
+            keccak256(type(Letterbox).creationCode),
+            keccak256(type(Tribunal).creationCode)
         );
         // After the launch transaction: anyone deploys the committed Letterbox.
         letterbox = Letterbox(launch.deployLetterbox(type(Letterbox).creationCode));
@@ -242,7 +244,7 @@ contract ForkTestnetTest is Test {
         assertEq(gate.SEASON(), SEASON);
         assertEq(gate.DEADMAN(), DEADMAN);
         assertEq(plea.hook(), address(hook));
-        assertEq(plea.balanceOf(address(seasons)), 30_000_000e18);
+        assertEq(plea.balanceOf(address(seasons)), 60_000_000e18);
         assertEq(hook.creditGas(), CREDIT_GAS);
         assertApproxEqRel(hook.capDecayPerDay(), (hook.inventoryCap() - hook.CAP_FLOOR()) / 25, 1e15, "25-day decay");
         assertTrue(gate.cabalAlive());
@@ -445,7 +447,7 @@ contract ForkTestnetTest is Test {
         seasons.flushToWall();
         assertEq(seasons.pot(), 0);
         assertEq(plea.balanceOf(address(seasons)), 0, "the unused PLEA bonus is burned");
-        assertEq(seasons.bonusBurned(), 30_000_000e18);
+        assertEq(seasons.bonusBurned(), 60_000_000e18);
     }
 
     function test_seasonWinnerGetsThePleaBonus() public {
@@ -466,12 +468,12 @@ contract ForkTestnetTest is Test {
         seasons.record(id2);
         _warp(t0 + 2 * SEASON + 1 hours + 1);
         seasons.closeSeason(new uint256[](0)); // season 0: nobody qualified, its bonus is burned
-        assertEq(seasons.bonusBurned(), 5_000_000e18);
+        assertEq(seasons.bonusBurned(), 10_000_000e18);
         uint256 before = plea.balanceOf(a);
         seasons.closeSeason(new uint256[](0)); // season 1: a has 81 points
-        assertEq(plea.balanceOf(a) - before, 1_250_000e18);
-        assertEq(seasons.bonusBurned(), 5_000_000e18 + 3_750_000e18);
-        assertEq(plea.balanceOf(address(seasons)), 20_000_000e18);
+        assertEq(plea.balanceOf(a) - before, 450_000e18);
+        assertEq(seasons.bonusBurned(), 10_000_000e18 + 9_550_000e18);
+        assertEq(plea.balanceOf(address(seasons)), 40_000_000e18);
 
         // the winner sells most of the prize through a plea, after the 4-hour cooldown
         _warp(_now() + 4 hours);
