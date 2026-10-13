@@ -4,7 +4,7 @@
 
 Launched through the IMD swarm straight from this repository (`launch.open` with `repoUrl` + `baseCommit`). It builds on PLEA v2 (IMD launch #1148) and the v4 fixes.
 
-**Branches.** `testnet4` is the current code (Sepolia test run 4: run 3's accepted code plus imd/acc's trader rule, no keeper tip, and the fixes from run 3's audit and live test). `mainnet` is the same code with the Ethereum settings. `testnet3` is run 3's source (live on Sepolia, launch #1426), `testnet` run 2's (launch #1311). This `main` branch keeps the launch #1242 code; this README describes the current protocol as it is on `testnet4` and `mainnet`.
+**Branches.** `main` and `testnet4` carry the current code with the Sepolia settings (test run 4: run 3's accepted code plus imd/acc's trader rule, no keeper tip, and the fixes from run 3's audit and live test). `mainnet` is the same code with the Ethereum settings. `testnet3` is run 3's source (live on Sepolia, launch #1426), `testnet` run 2's (launch #1311). IMD launches pin a commit, so a run's exact source is the commit its job names.
 
 ---
 
@@ -201,7 +201,7 @@ Then:
 
 3. **Open trading.** `PleaLaunch.seed()` creates the pool at a 5,700 IMD market cap and starts the Cabal. The owner may call it any time, and anyone may call it once `START` has passed.
 
-**Settings per network** (`launch.json` on `testnet4` and `mainnet`):
+**Settings per network** (`launch.json` here and on `testnet4` for Sepolia, on `mainnet` for Ethereum):
 
 | Setting | Sepolia (test runs) | Ethereum (`mainnet` branch) |
 |---|---|---|

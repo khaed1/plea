@@ -8,14 +8,15 @@ import {OracleAttestation} from "../../src/OracleAttestation.sol";
 import {PLEA} from "../../src/PLEA.sol";
 import {CabalGate} from "../../src/CabalGate.sol";
 import {Seasons} from "../../src/Seasons.sol";
-import {Laureates} from "../../src/Laureates.sol";
 import {PleaDistributor} from "../../src/PleaDistributor.sol";
+import {Letterbox} from "../../src/Letterbox.sol";
 import {PleaLaunch} from "../../src/PleaLaunch.sol";
 import {PleaHook} from "../../src/PleaHook.sol";
 import {MockIMD, MockSIMD, MockStacker, BuyRouter, MockIntake} from "./Mocks.sol";
 
-/// @dev Replays the launch (PLEA, CabalGate, Seasons, Laureates, PleaDistributor, PleaLaunch in one
-/// call context), mines the hook salt, deploys the hook and opens trading.
+/// @dev Replays the launch (PLEA, CabalGate, Seasons, PleaDistributor, PleaLaunch in one call
+/// context), deploys the Letterbox through PleaLaunch, mines the hook salt, deploys the hook and
+/// opens trading.
 contract Fixture is Test {
     address constant OWNER = 0x4b91078b2374c956A65F7Af0999CaE0a935E6821;
     /// @dev anvil's second account, used as the test oracle signer.
@@ -36,8 +37,8 @@ contract Fixture is Test {
     PLEA plea;
     CabalGate gate;
     Seasons seasons;
-    Laureates laureates;
     PleaDistributor distributor;
+    Letterbox letterbox;
     PleaLaunch launch;
     PleaHook hook;
     BuyRouter router;
@@ -49,6 +50,16 @@ contract Fixture is Test {
     address[] users;
 
     function setTimings() internal virtual {}
+
+    /// @dev Sepolia: a separate oracle fee token (the Letterbox mints the fee). Mainnet path: return
+    /// the pool IMD, so the Letterbox buys the oracle fee with PLEA like the tip.
+    function oracleFeeToken() internal view virtual returns (MockIMD) {
+        return oimd;
+    }
+
+    function creditGasBudget() internal pure virtual returns (uint256) {
+        return CREDIT_GAS;
+    }
 
     /// @dev Default: past the 90-minute launch window (no extra fee, no buy cap).
     function afterSeed() internal virtual {
@@ -65,7 +76,7 @@ contract Fixture is Test {
         oimd = new MockIMD();
         simd = new MockSIMD();
         stacker = new MockStacker(imd, simd);
-        intake = new MockIntake(oimd);
+        intake = new MockIntake(oracleFeeToken());
         deployLaunch();
         deployHook();
         vm.prank(OWNER);
@@ -99,28 +110,36 @@ contract Fixture is Test {
 
     function deployLaunch() internal {
         plea = new PLEA(OWNER);
-        gate = new CabalGate(address(plea), address(intake), address(oimd), address(imd), SIGNER, SEASON, DEADMAN);
+        gate = new CabalGate(
+            address(plea), address(intake), address(oracleFeeToken()), address(imd), SIGNER, SEASON, DEADMAN
+        );
         seasons = new Seasons(address(plea), address(gate), address(imd));
-        laureates = new Laureates(address(plea));
         distributor = new PleaDistributor(address(plea), OWNER);
+        MockIMD feeToken = oracleFeeToken();
         launch = new PleaLaunch(
             address(plea),
             address(gate),
             address(seasons),
-            address(laureates),
             address(distributor),
             address(pm),
             address(imd),
             address(stacker),
-            CREDIT_GAS,
-            T0 + 1 days
+            creditGasBudget(),
+            T0 + 1 days,
+            address(feeToken),
+            feeToken != imd,
+            keccak256(type(Letterbox).creationCode)
         );
+        // After the launch: anyone deploys the committed Letterbox.
+        letterbox = Letterbox(launch.deployLetterbox(type(Letterbox).creationCode));
     }
 
     function hookInitCode() internal view returns (bytes memory) {
         return abi.encodePacked(
             type(PleaHook).creationCode,
-            abi.encode(address(pm), address(plea), address(imd), address(stacker), OWNER, address(seasons), CREDIT_GAS)
+            abi.encode(
+                address(pm), address(plea), address(imd), address(stacker), OWNER, address(seasons), creditGasBudget()
+            )
         );
     }
 
@@ -154,6 +173,12 @@ contract Fixture is Test {
     function plead(address who, uint256 amount, string memory text) internal returns (uint256 id) {
         vm.prank(who);
         id = gate.submitSell(amount, text);
+    }
+
+    /// @dev A valid small plea: 2% of the balance (the gate's minimum is 1%), at most 2.5M PLEA.
+    function small(address who) internal view returns (uint256 amount) {
+        amount = plea.balanceOf(who) / 50;
+        if (amount > 2_500_000e18) amount = 2_500_000e18;
     }
 
     function intakeIdOf(uint256 id) internal view returns (bytes32) {
