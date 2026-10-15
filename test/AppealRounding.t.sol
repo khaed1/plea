@@ -72,7 +72,10 @@ contract AppealRoundingTest is Fixture {
     }
 
     function test_cappedMinimumSitePleaCanAppealAfterFeeSale() public {
-        buy(alice, 1_000e18);
+        // A bag whose 1% exceeds the 2.5M cap: 1,000 IMD on the Sepolia seed (5,700 IMD), more on a larger one.
+        while (plea.balanceOf(alice) / 100 <= gate.MAX_SELL() * 102 / 100) {
+            buy(alice, 250e18 * hook.MARKET_CAP_IMD() / 5_700e18);
+        }
         uint256 originalBalance = plea.balanceOf(alice);
         uint256 amount = gate.MAX_SELL();
         assertGt(originalBalance / 100, amount);
@@ -93,7 +96,7 @@ contract AppealRoundingTest is Fixture {
     }
 
     function test_shareBandsAndFiftyPercentClampKeepTheirExistingRounding() public {
-        uint256[3] memory shares = [uint256(1_500), 3_000, 5_000];
+        uint256[3] memory shares = [uint256(2_000), 3_500, 5_000];
         for (uint256 i; i < shares.length; ++i) {
             uint256 snapshot = vm.snapshotState();
             uint256 originalBalance = 5_000_000e18 + 99;
