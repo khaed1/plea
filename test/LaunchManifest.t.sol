@@ -43,7 +43,7 @@ abstract contract ManifestFixture is Test {
     address constant STACKER = 0x0457276D7b036818B3EddC1A4A3FCeda61e9314d;
     /// @dev The IMD seat NFT (test) on Sepolia, read by Seasons for the points multiplier.
     address constant SEAT = 0xa0443799c320E16C80801c9C1911F3571260287F;
-    uint256 constant START = 1792162800;
+    uint256 constant START = 1792335600;
     uint256 constant SEASON = 18_000;
     uint256 constant CREDIT_GAS = 1_300_000;
     bool constant MINT_ORACLE_FEE = true;
