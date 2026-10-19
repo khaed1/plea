@@ -258,21 +258,21 @@ Then:
 
 4. **Open trading.** `PleaLaunch.seed()` creates the pool at a 5,700 IMD market cap (at least that, within one 60-tick spacing: the band is aligned to the grid on the PLEA-only side) and starts the Cabal. The hook, the Letterbox and (with objections on) the Tribunal must exist first. PLEA's current owner may call it any time, and anyone may call it once `START` has passed.
 
-**Sepolia settings** (`launch.json` on this branch; `testnet8.5` is run 8.5's source (launch #1981), `testnet8` run 8's (not launched), `testnet7` run 7's (launch #1843), `testnet6` run 6's, `testnet4` run 4's (launch #1466), `testnet3` run 3's (launch #1426), `testnet` run 2's; the `mainnet` branch has the Ethereum settings):
+**Sepolia settings** (`launch.json` on this branch, test run 9; `testnet8.5` is run 8.5's source (launch #1981), `testnet8` run 8's (not launched), `testnet7` run 7's (launch #1843), `testnet6` run 6's, `testnet4` run 4's (launch #1466), `testnet3` run 3's (launch #1426), `testnet` run 2's; the `mainnet` branch has the Ethereum settings):
 
 | Setting | Value |
 |---|---|
 | Intake v2 | `0xa43e6f75ee006411f79ac1c84120606c2330de82` |
-| Oracle fee asset | test IMD `0x44a1cd38474fb1748400e7deb5f8d786cce3f89a` (open `mint`) |
-| Pool IMD | TestIMD `0x2b69099e59b05901faa1dd164fabf098bf831e82` |
-| Stacker | `0x0457276d7b036818b3eddc1a4a3fceda61e9314d` (imd/acc launch #1294) |
+| Oracle fee asset | imdTEST `0x56bcf2a5f47710649a4091219ef0b56e2d1b58bf` (IMD's Sepolia test IMD; only its owner and the minters it names mint; IMD's Sepolia Intake sells oracle questions only in it since 2026-10-18, and runs 2 to 8.5's open-mint test IMD `0x44a1…f89a` is priced at 0 there) |
+| Pool IMD | the same imdTEST: one token for the pool and the oracle fee, as on Ethereum |
+| Stacker | `0x0457276d7b036818b3eddc1a4a3fceda61e9314d` (imd/acc launch #1294; it stakes the earlier TestIMD, so its credit reverts and the hook pays the 0.5% cashback in plain imdTEST) |
 | Seat NFT | IMD NFT (test) `0xa0443799c320e16c80801c9c1911f3571260287f` (open mint; mainnet: identity.md `0x0000ec93127baa929e58e97dd0095a2bfb38ec1d`) |
 | Season | 5 hours (fast clock for testing) |
 | Dead-man | 33 hours (real) |
 | Plea timings | real (20 min, 7 min, 4 h) |
-| `START` | 1792335600 (Sun 2026-10-18 15:00 UTC; the owner may seed earlier) |
+| `START` | 1792594800 (Wed 2026-10-21 15:00 UTC; the owner may seed earlier) |
 | Cashback credit gas | 1,300,000 (Sepolia's gas schedule) |
-| Letterbox | mints the 0.5 test oracle fee itself (`mintOracleFee = true`; refused on chain id 1, where the fee is bought with PLEA like the tip) |
+| Letterbox | buys the 0.5 oracle fee and the 0.25 tip with the writer's PLEA (`mintOracleFee = false`, as on Ethereum; runs 2 to 8.5 minted the open test fee) |
 
 The manifest rehearsal measures the launch as the chain charges it (the init codes as transaction data, then their execution) plus the overhead of IMD's real factory, measured by sending these five codes through the mainnet ProjectFactory on a fork (994,547 gas; the test adds 1.1M): about **13.49M gas**, and about **16.46M** with the 22% headroom IMD's deployer adds to a gas limit, under the 16,777,216 cap; the test asserts it. `deployLetterbox` is its own transaction of about **5.58M** gas, and `deployTribunal` about **5.27M**, `deployHook` about **5.4M** on Ethereum's schedule. `test/fork/ForkTestnet.t.sol` rehearses the whole run on a Sepolia fork against the live Intake v2:
 

@@ -32,21 +32,23 @@ contract ManifestFactory {
 }
 
 abstract contract ManifestFixture is Test {
-    // Exact static constructor values from the supplied launch.json (Sepolia test run 3). Only
-    // $owner and earlier contract references are resolved locally; no external contract is
-    // installed or called.
+    // Static constructor values from the Sepolia launch.json (test run 9). Only $owner and earlier
+    // contract references are resolved locally; no external contract is installed or called.
+    // imdTEST is both the oracle fee asset and the pool currency (IMD's Sepolia Intake sells oracle
+    // questions only in it since 2026-10-18), so the Letterbox buys the oracle fee with PLEA
+    // (mintOracleFee = false).
     address constant INTAKE = 0xa43e6F75ee006411F79Ac1C84120606C2330DE82;
-    address constant ORACLE_ASSET = 0x44a1Cd38474FB1748400E7DEb5F8D786ccE3F89A;
-    address constant IMD = 0x2B69099E59b05901faA1DD164fabf098bf831E82;
+    address constant ORACLE_ASSET = 0x56bcf2a5F47710649A4091219Ef0b56e2d1B58BF;
+    address constant IMD = 0x56bcf2a5F47710649A4091219Ef0b56e2d1B58BF;
     address constant SIGNER = 0x5598Aa9146215Bc13eb26f2c692Ad1461Fd32982;
     address constant POOL_MANAGER = 0xE03A1074c86CFeDd5C142C4F04F1a1536e203543;
     address constant STACKER = 0x0457276D7b036818B3EddC1A4A3FCeda61e9314d;
     /// @dev The IMD seat NFT (test) on Sepolia, read by Seasons for the points multiplier.
     address constant SEAT = 0xa0443799c320E16C80801c9C1911F3571260287F;
-    uint256 constant START = 1792335600;
+    uint256 constant START = 1792594800;
     uint256 constant SEASON = 18_000;
     uint256 constant CREDIT_GAS = 1_300_000;
-    bool constant MINT_ORACLE_FEE = true;
+    bool constant MINT_ORACLE_FEE = false;
     /// @dev Ethereum's per-transaction gas cap (EIP-7825), and the headroom IMD's deployer adds to
     /// a launch's gas limit (limit / used was 1.175-1.214 on its last four launches).
     uint256 constant TX_GAS_CAP = 16_777_216;
@@ -222,7 +224,8 @@ contract AtomicManifestTest is ManifestFixture {
     function test_launchJsonEncodesOracleMintFlagAsStaticWord() public view {
         string memory json = vm.readFile("launch.json");
         string memory flag = vm.parseJsonString(json, ".contracts[4].constructorArgs[10]");
-        assertEq(flag, "1", "the Sepolia mint flag must be the static bool word 1");
+        // Run 9: the Letterbox buys the oracle fee with PLEA, so the flag is the static bool word 0.
+        assertEq(flag, MINT_ORACLE_FEE ? "1" : "0", "the mint flag must be the static bool word 0 or 1");
         assertEq(abi.encode(vm.parseUint(flag)), abi.encode(MINT_ORACLE_FEE));
     }
 
