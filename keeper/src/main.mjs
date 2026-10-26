@@ -8,6 +8,10 @@ const log = (o) => console.log(JSON.stringify({ t: new Date().toISOString(), ...
 const cfg = loadConfig();
 const keeper = await Keeper.create(cfg, log);
 const once = process.argv.includes('--once');
+if (process.argv.includes('--test-alert')) {
+  await keeper.alerter.send('test alert: Telegram works.');
+  process.exit(0);
+}
 
 let stopping = false;
 for (const sig of ['SIGINT', 'SIGTERM']) {

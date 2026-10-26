@@ -102,5 +102,14 @@ DRY_RUN=1 node --env-file=.env src/main.mjs
 node --env-file=.env src/main.mjs
 ```
 
-`keeper.service` is a systemd unit for a VPS. `npm test` runs the planner's unit tests;
-`rehearsal/` replays every job on a local fork of Ethereum (needs Foundry, see its README).
+`--once` runs one pass and exits; `--test-alert` sends one Telegram message and exits.
+`src/new-wallet.mjs` creates the keeper's wallet inside `.env` without showing the key, and
+`src/telegram-chat.mjs` finds your Telegram chat id. **`VPS.md`** is the step-by-step setup on a VPS
+(`keeper.service` is its systemd unit).
+
+## Tests
+
+- `npm test`: the planner's unit tests (every rule and its edges, from synthetic chain states).
+- `rehearsal/run.mjs`: every job on a local fork of Ethereum with the real Intake, IMD, PoolManager,
+  Stacker and seat NFT, our contracts deployed from this repo's build and a test oracle key (see
+  `rehearsal/README.md`).
