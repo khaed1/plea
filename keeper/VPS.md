@@ -23,14 +23,13 @@ The check must print `node-v24.21.0-linux-x64.tar.xz: OK`, and the last line `v2
 
 ```
 apt-get install -y git
-git clone --branch keeper https://github.com/khaed1/plea /opt/plea-keeper/plea
+git clone --branch main https://github.com/khaed1/plea /opt/plea-keeper/plea
 cd /opt/plea-keeper/plea/keeper
 PATH=/opt/plea-keeper/node/bin:$PATH npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 chown -R plea-keeper:plea-keeper /opt/plea-keeper/plea
 git config --global --add safe.directory /opt/plea-keeper/plea   # lets root run git pull here later
 ```
 
-(After the mainnet launch the keeper is merged into `main`: use `--branch main` then.)
 
 ## 3. The keeper's wallet
 
