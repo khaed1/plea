@@ -1,0 +1,25 @@
+# systemd unit for the PLEA keeper, laid out as in VPS.md. Install (as root):
+#   cp keeper.service /etc/systemd/system/plea-keeper.service
+#   systemctl daemon-reload && systemctl enable --now plea-keeper
+#   journalctl -u plea-keeper -f
+[Unit]
+Description=PLEA keeper
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=plea-keeper
+WorkingDirectory=/opt/plea-keeper/plea/keeper
+ExecStart=/opt/plea-keeper/node/bin/node --env-file=.env src/main.mjs
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/plea-keeper/plea/keeper
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
