@@ -1,0 +1,17 @@
+{
+  "name": "plea-keeper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Upkeep for PLEA: deliveries, expiries, settles, records, season closes and the buy wall",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "viem": "2.57.4"
+  }
+}
